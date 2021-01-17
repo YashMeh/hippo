@@ -1,0 +1,12 @@
+[sources.kafka]
+type = "kafka"
+bootstrap_servers = "kafka-server1:9092"
+group_id = "bar"
+topics = [ "foo"]
+
+[sinks.out]
+type = "influxdb_logs"
+inputs = [ "kafka" ]
+database = "db0"
+endpoint = "http://influxdb:8086/"
+namespace = "bookings2"
