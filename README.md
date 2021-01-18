@@ -5,8 +5,9 @@ Hippo is a data ingestor service for gRPC and REST based clients. It publishes y
 ## Why ? Why not ?
 While making this project I learnt so many things and it gave me an excuse to solve one of the problems that I face a lot, dealing with server logs. 
 ## <u>Architecture</u>
-Insert Picture here
+![Architecture](https://raw.githubusercontent.com/YashMeh/hippo/main/assets/architecture.png?token=AH6I55BNHFQQFDDJXV6E5RTAB34EY)
 ## <u>Alternative Methods</u>
+These are just what I can think of right on top of my head.
 - Use a 3rd party paid service for managing your data collection pipeline <b>but</b>, in the long run you will become dependent and as the data grows your cost will increase manifold.
 - Create a proxy and start dumping everything on cache(Redis etc.) and create a worker to feed that to the database <b>but</b>, cache is expensive to maintain and there is only so much that you can store on the cache.
 - Directly feed to the database <b>but</b>, you will be bounded by query/secs and will not receive reliable gRPC support for major databases.
@@ -63,10 +64,21 @@ Hippo can be used to handle high volume streaming data, some of the usecases tha
 1. Logging server logs produced by different microservices 
 2. IoT devices that generate large amount of data
 
-## TBD (v2 maybe (?))
+## <u>TBD</u> (v2 maybe (?))
 - [ ] Right now, the messages sent do not enforce any schema, this feature will be very useful while querying the influxdb (Add an enrichment layer to the connector itself, maybe (?))  
 - [ ] Provide benchmarks
 
+
+## <u>Acknowledgement</u>
+This project wouldn't have been possible without some very very kickass os projects :fire:
+
+1. [kafka-pixy](https://github.com/mailgun/kafka-pixy)
+2. [timberio/vector](https://github.com/timberio/vector)
+3. [bitnami](https://bitnami.com/)
+4. [apache-kafka](https://github.com/apache/kafka)
+5. [apache-zookeeper](https://github.com/apache/zookeeper)
+
+<br> <br>
 ### Yash Mehrotra
 
 ![GitHub followers](https://img.shields.io/github/followers/YashMeh?label=Follow&style=social) ![Twitter URL](https://img.shields.io/twitter/follow/YashMeh29715504?label=Follow&style=social)
