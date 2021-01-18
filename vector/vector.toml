@@ -9,4 +9,4 @@ type = "influxdb_logs"
 inputs = [ "kafka" ]
 database = "db0"
 endpoint = "http://influxdb:8086/"
-namespace = "bookings2"
+namespace = "hippo"
