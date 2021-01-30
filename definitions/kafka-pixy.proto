@@ -1,0 +1,369 @@
+syntax = "proto3";
+option go_package = "pb";
+
+// Java Options
+option java_multiple_files = true;
+option java_package = "mailgun.kafkapixy";
+option java_outer_classname = "KafkaPixyProto";
+
+service KafkaPixy {
+    // Produce writes a message to a Kafka topic.
+    //
+    // If ProdReq.async_mode is false (default value) then the request will
+    // block until the message is written to all ISR. In this case the respose
+    // will contain the partition and offset of the message. This has to be
+    // used to achive at-least-once deliverability guarantee.
+    // If ProdReq.async_mode is true, then Kafka-Pixy returns immediately after
+    // it gets the request and performs write on the backgroud. This mode
+    // ensures highest throughput but messages can be lost, e.g. if the host
+    // crashes before Kafka-Pixy has a chance to complete write.
+    //
+    // Hash of ProdReq.key_value is used to determine a partition that the
+    // message should be written to. If you want a message to go to an random
+    // partition then set ProdReq.key_undefined to true. Note that if both
+    // ProdReq.key_undefined and ProdReq.key_value are left default, which is
+    // empty string and false respectively, then messages will be consitently
+    // written to a partiticular partition selected by the hash of an empty
+    // string.
+    //
+    // gRPC error codes:
+    //  * Invalid Argument (3): see the status description for details;
+    //  * Internal (13): see the status description and logs for details;
+    //  * Unavailable (14): the service is shutting down.
+    rpc Produce (ProdRq) returns (ProdRs) {}
+
+    // Consume reads a message from a topic and optionally acknowledges a
+    // message previously consumed from the same topic.
+    //
+    // Requests are performed in long polling fation, that is if all available
+    // messages have been consumed then the request will block for
+    // config.yaml:proxies.<cluster>.consumer.long_polling_timeout waiting for
+    // new messages. If no new messages is produced while waiting the request
+    // will return gRPC error with 408 status code.
+    //
+    // To consume the first message set ConsNAckReq.no_ack to true, since there
+    // is no message to acknowledge at this point. In the second and all
+    // subsequent calls of the method set ConsNAckReq.ack_partition and
+    // ConsNAckReq.ack_offset to the respective values of ConsRes returned by
+    // the previous method call. To acknowledge the last consumed message before
+    // teminating the application call Ack method.
+    //
+    // If a message is not acknowledged within
+    // config.yaml:proxies.<cluster>.consumer.ack_timeout the it will be returned
+    // by Kafka-Pixy in ConsRes again possibly to another application.
+    //
+    // If at-least-once delivery guarantee and retries are not desirable, then
+    // you can set ConsNAckReq.auto_ack to true and Kafka-Pixy will acknowledge
+    // messages automatically before returning them in ConsRes.
+    //
+    // gRPC error codes:
+    //  * Not Found (5): It just means that all message has been consumed and
+    //    the long polling timeout has elaspsed. Just keep calling this method
+    //    in a loop;
+    //  * Resource Exhausted (8): too many consume requests. Either reduce the
+    //    number of consuming threads or increase
+    //    config.yaml:proxies.<cluster>.consumer.channel_buffer_size;
+    //  * Invalid Argument (3): see the status description for details;
+    //  * Internal (13): see the status description and logs for details;
+    //  * Unavailable (14): the service is shutting down.
+    rpc ConsumeNAck (ConsNAckRq) returns (ConsRs) {}
+
+    // Ack acknowledges a message earlier consumed from a topic.
+    //
+    // This method is provided solely to acknowledge the last consumed message
+    // before the application terminates. In all other cases ConsumeNAck should
+    // be used.
+    //
+    // gRPC error codes:
+    //  * Invalid Argument (3): see the status description for details;
+    //  * Internal (13): see the status description and logs for details;
+    rpc Ack (AckRq) returns (AckRs) {}
+
+    // Fetches partition offsets for the specified topic and group
+    //
+    // gRPC error codes:
+    //  * Invalid Argument (3): If unable to find the cluster named in the request
+    //  * Internal (13): If Kafka returns an error on offset request
+    //  * NotFound (5): If the group and or topic does not exist
+    rpc GetOffsets (GetOffsetsRq) returns (GetOffsetsRs) {}
+
+    // Sets partition offsets for the specified topic and group.
+    // NOTE: Although the request accepts the PartitionOffset object i
+    // only 'Partition', 'Offset' and 'Metadata' are set by this method
+    //
+    // gRPC error codes:
+    //  * Invalid Argument (3): If unable to find the cluster named in the request
+    //  * Internal (13): If Kafka returns an error on offset request
+    //  * NotFound (5): If the group and or topic does not exist
+    rpc SetOffsets (SetOffsetsRq) returns (SetOffsetsRs) {}
+
+    // Lists all topics and metadata with optional metadata for the partitions of the topic
+    //
+    // gRPC error codes:
+    //  * Invalid Argument (3): If unable to find the cluster named in the request
+    //  * Internal (13): If Kafka returns an error on request
+    rpc ListTopics (ListTopicRq) returns (ListTopicRs) {}
+
+    // Lists all consumers of a topic
+    //
+    // gRPC error codes:
+    //  * Invalid Argument (3): If unable to find the cluster named in the request
+    //  * Internal (13): If Kafka returns an error on request
+    rpc ListConsumers (ListConsumersRq) returns (ListConsumersRs) {}
+
+    // Fetches topic metadata and optional metadata for the partitions of the topic
+    //
+    // gRPC error codes:
+    //  * Invalid Argument (3): If unable to find the cluster named in the request
+    //  * Internal (13): If Kafka returns an error on request
+    //  * NotFound (5): If the topic does not exist
+    rpc GetTopicMetadata (GetTopicMetadataRq) returns (GetTopicMetadataRs) {}
+}
+
+message RecordHeader {
+    // Key in the header key-value pair
+    string key = 1;
+
+    // Value in the header key-value pair
+    bytes value = 2;
+}
+
+message ProdRq {
+    // Name of a Kafka cluster to operate on.
+    string cluster = 1;
+
+    // Name of a topic to produce to.
+    string topic = 2;
+
+    // Hash of the key is used to determine the partition to produce to. By
+    // default it is an empty array which is a valid key, unless key_undefined
+    // is set to true and then a random partition is selected.
+    bytes key_value = 3;
+
+    // If true then the message is written to a random partition, otherwise
+    // hash of key_value is used to determine the partition.
+    bool key_undefined = 4;
+
+    // Message body.
+    bytes message = 5;
+
+    // If true then the method returns immediately after Kafka-Pixy gets the
+    // produce request, and the message is written to Kafka asynchronously.
+    // In that case partition and offset returned in response should be ignored.
+    // If false, then a response is returned in accordance with the
+    // producer.required_acks parameter, that can be one of:
+    //  * no_response:    the response is returned as soon as a produce request
+    //                    is delivered to a partition leader Kafka broker.
+    //  * wait_for_local: the response is returned as soon as data is written
+    //                    to the disk by a partition leader Kafka broker.
+    //  * wait_for_all:   the response is returned after all in-sync replicas
+    //                    have data committed to disk.
+    bool async_mode = 6;
+
+    // Headers to include with the published message
+    repeated RecordHeader headers = 7;
+}
+
+message ProdRs {
+    // Partition the message was written to. The value only makes sense if
+    // ProdReq.async_mode was false.
+    int32 partition = 1;
+
+    // Offset the message was written to. The value only makes sense if
+    // ProdReq.async_mode was false.
+    int64 offset = 2;
+}
+
+message ConsNAckRq {
+    // Name of a Kafka cluster to operate on.
+    string cluster = 1;
+
+    // Name of a topic to produce to.
+    string topic = 2;
+
+    // Name of a consumer group.
+    string group = 3;
+
+    // If true then no message is acknowledged by the request.
+    bool no_ack = 4;
+
+    // If true and no_ack is false then the message returned by the requests is
+    // automatically acknowledged by Kafka-Pixy before the request completes.
+    bool auto_ack = 5;
+
+    // If both no_ack and auto_ack are false (by default), then ack_partition
+    // and ack_offset along with cluster-group-topic determine the message that
+    // should be acknowledged by the request.
+    int32 ack_partition = 6;
+    int64 ack_offset = 7;
+}
+
+message ConsRs {
+    // Partition the message was read from.
+    int32 partition = 1;
+
+    // Offset of the read message in the partition.
+    int64 offset = 2;
+
+    // Key that was used to produce the message, unless key_undefined is true,
+    // then it is undefined.
+    bytes key_value = 3;
+
+    // If true then the message was produced to a random partition.
+    bool key_undefined = 4;
+
+    // Message body
+    bytes message = 5;
+
+    // Headers associated with the message
+    repeated RecordHeader headers = 6;
+}
+
+message AckRq {
+    // Name of a Kafka cluster to operate on.
+    string cluster = 1;
+
+    // Name of a topic to produce to.
+    string topic = 2;
+
+    // Name of a consumer group.
+    string group = 3;
+
+    // Partition that the acknowledged message was consumed from.
+    int32 partition = 4;
+
+    // Offset in the partition that the acknowledged message was consumed from.
+    int64 offset = 5;
+}
+
+message AckRs {}
+
+
+message PartitionOffset {
+    // The Partition this structure describes
+    int32 partition = 1;
+
+    // The beginning offset
+    int64 begin = 2;
+
+    // The ending offset
+    int64 end = 3;
+
+    // The number of messages in the partition
+    int64 count = 4;
+
+    // Offset in the partition
+    int64 offset = 5;
+
+    // The number of un-consumed messages in the partition
+    int64 lag = 6;
+
+    // Metatdata associated with the partition
+    string metadata = 7;
+
+    // human readable representation of sparsely committed ranges
+    string sparse_acks = 8;
+}
+
+message GetOffsetsRq {
+    // Name of a Kafka cluster
+    string cluster = 1;
+
+    // Name of a topic
+    string topic = 2;
+
+    // Name of a consumer group.
+    string group = 3;
+}
+
+message GetOffsetsRs {
+    repeated PartitionOffset offsets = 1;
+}
+
+// Partition metadata as retrieved from kafka
+message PartitionMetadata {
+    // The Partition this structure describes
+    int32 partition = 1;
+
+    // The node id for the kafka broker currently acting as leader for this partition.
+    // If no leader exists because we are in the middle of a leader election this id will be -1.
+    int32 leader = 2;
+
+    // The set of alive nodes that currently acts as slaves for the leader for this partition.
+    repeated int32 replicas = 3;
+
+    // The set subset of the replicas that are "caught up" to the leader
+    repeated int32 isr = 4;
+}
+
+message GetTopicMetadataRq {
+    // Name of a Kafka cluster
+    string cluster = 1;
+
+    // Name of a topic
+    string topic = 2;
+
+    // Should include partition metadata
+    bool with_partitions = 3;
+}
+
+message GetTopicMetadataRs {
+    // Version of this metadata
+    int32 version  = 1;
+
+    // Config values
+    map<string, string> config = 2;
+
+    // Optional list of metadata for the partitions of this topic
+    repeated PartitionMetadata partitions = 3;
+}
+
+message ListTopicRs {
+    map<string, GetTopicMetadataRs> topics = 1;
+}
+
+message ListTopicRq {
+    // Name of a Kafka cluster
+    string cluster = 1;
+
+    // Should include partition metadata
+    bool with_partitions = 2;
+}
+
+message ListConsumersRq {
+    // Name of a Kafka cluster
+    string cluster = 1;
+
+    // Name of a topic
+    string topic = 2;
+
+    // If non empty, return only the specified group in the result
+    string group = 3;
+}
+
+message ConsumerPartitions {
+    repeated int32 partitions = 1;
+}
+
+message ConsumerGroups {
+    map<string, ConsumerPartitions> consumers = 1;
+}
+
+message ListConsumersRs {
+    map<string, ConsumerGroups> groups = 1;
+}
+
+message SetOffsetsRq {
+    // Name of a Kafka cluster
+    string cluster = 1;
+
+    // Name of a topic
+    string topic = 2;
+
+    // Name of a consumer group.
+    string group = 3;
+
+    repeated PartitionOffset offsets = 4;
+}
+
+message SetOffsetsRs {}
