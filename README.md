@@ -12,7 +12,8 @@ Also, while making this project I learnt so many things and it gave me an excuse
 
 ### <u>Performence</u>
 
-These data points were obtained by running 1 instance of each service on a quad-core , 16 GB RAM pc.
+These data points were obtained by running 1 instance of each service on a quad-core , 16 GB RAM pc. <br> </br>
+![Benchmark](https://raw.githubusercontent.com/YashMeh/hippo/main/assets/benchmark1.png)
 
 ### <u>Benchmarking</u>
 
